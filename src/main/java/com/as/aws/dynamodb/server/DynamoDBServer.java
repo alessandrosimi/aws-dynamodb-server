@@ -30,10 +30,14 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.File;
 import java.io.IOException;
+import java.net.ServerSocket;
 import java.net.URISyntaxException;
 import java.util.UUID;
+import java.util.logging.Logger;
 
 public class DynamoDBServer {
+
+    private static final Logger logger = Logger.getLogger(DynamoDBServer.class.getName());
 
     private final static Boolean RUN_IN_MEMORY = true;
     private final static String EMPTY_DB_PATH = null;
@@ -56,9 +60,29 @@ public class DynamoDBServer {
         });
     }
 
+    public DynamoDBServer() {
+        this(findPort());
+    }
+
+    private static int findPort() {
+        try {
+            ServerSocket socket = null;
+            try {
+                socket = new ServerSocket(0);
+                socket.setReuseAddress(true);
+                return socket.getLocalPort();
+            } finally {
+                socket.close();
+            }
+        } catch (Exception e) {
+            throw new IllegalStateException("Impossible to find a free port");
+        }
+    }
+
     public void start() {
         loadSqlLiteLibraries();
         try {
+            logger.info("Start dynamo db server on port " + port);
             server.start();
         } catch (Exception e) {
             throw new IllegalStateException("Impossible to start Dynamo DB Server", e);
@@ -87,6 +111,7 @@ public class DynamoDBServer {
 
     public void stop() {
         try {
+            logger.info("Stop dynamo db server");
             server.stop();
         } catch (Exception e) {
             throw new IllegalStateException("Impossible to stop Dynamo DB Server", e);

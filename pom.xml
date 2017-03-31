@@ -38,6 +38,78 @@
 
     <build>
         <plugins>
+            <!-- Shade -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>1.6</version>
+                <configuration>
+                    <finalName>${project.artifactId}-${project.version}-bin</finalName>
+                    <shadedArtifactAttached>true</shadedArtifactAttached>
+                    <shadedClassifierName>assembly</shadedClassifierName>
+                    <filters>
+                        <filter>
+                            <artifact>*:*</artifact>
+                            <excludes>
+                                <exclude>META-INF/*.SF</exclude>
+                                <exclude>META-INF/*.DSA</exclude>
+                                <exclude>META-INF/*.RSA</exclude>
+                                <exclude>DynamoDBShell/**</exclude>
+                            </excludes>
+                        </filter>
+                    </filters>
+                    <artifactSet>
+                        <includes>
+                            <include>*:*:*</include>
+                        </includes>
+                        <excludes>
+                            <exclude>*:libsqlite4java-linux-i386:*</exclude>
+                            <exclude>*:libsqlite4java-linux-amd64:*</exclude>
+                            <exclude>*:sqlite4java-win32-x64:*</exclude>
+                            <exclude>*:sqlite4java-win32-x86:*</exclude>
+                            <exclude>*:libsqlite4java-osx:*</exclude>
+                        </excludes>
+                    </artifactSet>
+                    <createSourcesJar>true</createSourcesJar>
+                    <relocations>
+                        <relocation>
+                            <pattern>com</pattern>
+                            <shadedPattern>hidden.com</shadedPattern>
+                            <excludes>
+                                <exclude>com.as.aws.*</exclude>
+                            </excludes>
+                        </relocation>
+                        <relocation>
+                            <pattern>javax</pattern>
+                            <shadedPattern>hidden.javax</shadedPattern>
+                        </relocation>
+                        <relocation>
+                            <pattern>org</pattern>
+                            <shadedPattern>hidden.org</shadedPattern>
+                        </relocation>
+                        <relocation>
+                            <pattern>javolution</pattern>
+                            <shadedPattern>hidden.javolution</shadedPattern>
+                        </relocation>
+                    </relocations>
+                </configuration>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <!--<configuration>-->
+                            <!--<transformers>-->
+                                <!--<transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer" />-->
+                                <!--<transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">-->
+                                    <!--<mainClass>com.spaceape.wolf.TRexService</mainClass>-->
+                                <!--</transformer>-->
+                            <!--</transformers>-->
+                        <!--</configuration>-->
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
 

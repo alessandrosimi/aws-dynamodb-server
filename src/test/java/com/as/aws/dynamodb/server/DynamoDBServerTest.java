@@ -70,6 +70,24 @@ public class DynamoDBServerTest {
     }
 
     @Test
+    public void theServerShouldRespondToARandomPort() {
+        // Create and start the server
+        DynamoDBServer server = new DynamoDBServer();
+        server.start();
+        // Create the client
+        AmazonDynamoDBClient client = new AmazonDynamoDBClient(new BasicAWSCredentials("accessKey", "secretKey"));
+        client.setEndpoint(server.getEndpoint());
+        // Create a table
+        client.createTable(createTableRequest("tableName", "key"));
+        // Get the tables name
+        ListTablesResult result = client.listTables();
+        assertEquals(1, result.getTableNames().size());
+        assertEquals("tableName", result.getTableNames().get(0));
+        // Stop the server
+        server.stop();
+    }
+
+    @Test
     public void theServerShouldBeForcedToFailWithACustomError() {
         // Create and start the server
         DynamoDBServer server = new DynamoDBServer(8989);
