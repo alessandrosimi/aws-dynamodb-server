@@ -30,7 +30,6 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.File;
 import java.io.IOException;
-import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.UUID;
 
@@ -95,8 +94,9 @@ public class DynamoDBServer {
         }
     }
 
-    public URI endpoint() {
-        return URI.create("http://localhost:" + port);
+
+    public String getEndpoint() {
+        return "http://localhost:" + port;
     }
 
     private interface HandlerBehaviour {}
