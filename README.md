@@ -3,7 +3,7 @@
 
 # Aws DynamoDB Server
 
-A simple wrapper of the DynamoDBLocal project to make the easy to test DynamoDB locally with unit test.
+A simple wrapper of the AWS DynamoDBLocal project to make easy to test DynamoDB applications.
 
 ## Easy to use
 
