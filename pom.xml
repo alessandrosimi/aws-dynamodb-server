@@ -4,11 +4,12 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.as.aws</groupId>
+    <groupId>io.exemplary.aws</groupId>
     <artifactId>aws-dynamodb-server</artifactId>
     <version>${aws.version}</version>
 
     <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <aws.version>1.10.5.1</aws.version>
         <sqlite4java.version>1.0.392</sqlite4java.version>
     </properties>
@@ -38,15 +39,29 @@
 
     <build>
         <plugins>
+            <!-- Source -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-source-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>attach-sources</id>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
             <!-- Shade -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
                 <version>1.6</version>
                 <configuration>
-                    <finalName>${project.artifactId}-${project.version}-bin</finalName>
-                    <shadedArtifactAttached>true</shadedArtifactAttached>
-                    <shadedClassifierName>assembly</shadedClassifierName>
+                    <minimizeJar>true</minimizeJar>
+                    <createDependencyReducedPom>true</createDependencyReducedPom>
+                    <createSourcesJar>true</createSourcesJar>
+                    <promoteTransitiveDependencies>true</promoteTransitiveDependencies>
                     <filters>
                         <filter>
                             <artifact>*:*</artifact>
@@ -60,36 +75,14 @@
                     </filters>
                     <artifactSet>
                         <includes>
-                            <include>*:*:*</include>
+                            <include>com.amazonaws:DynamoDBLocal:*</include>
+                            <include>org.eclipse.jetty:*:*</include>
                         </includes>
-                        <excludes>
-                            <exclude>*:libsqlite4java-linux-i386:*</exclude>
-                            <exclude>*:libsqlite4java-linux-amd64:*</exclude>
-                            <exclude>*:sqlite4java-win32-x64:*</exclude>
-                            <exclude>*:sqlite4java-win32-x86:*</exclude>
-                            <exclude>*:libsqlite4java-osx:*</exclude>
-                        </excludes>
                     </artifactSet>
-                    <createSourcesJar>true</createSourcesJar>
                     <relocations>
                         <relocation>
-                            <pattern>com</pattern>
-                            <shadedPattern>hidden.com</shadedPattern>
-                            <excludes>
-                                <exclude>com.as.aws.*</exclude>
-                            </excludes>
-                        </relocation>
-                        <relocation>
-                            <pattern>javax</pattern>
-                            <shadedPattern>hidden.javax</shadedPattern>
-                        </relocation>
-                        <relocation>
-                            <pattern>org</pattern>
-                            <shadedPattern>hidden.org</shadedPattern>
-                        </relocation>
-                        <relocation>
-                            <pattern>javolution</pattern>
-                            <shadedPattern>hidden.javolution</shadedPattern>
+                            <pattern>org.eclipse.jetty</pattern>
+                            <shadedPattern>shaded.org.eclipse.jetty</shadedPattern>
                         </relocation>
                     </relocations>
                 </configuration>
@@ -99,19 +92,22 @@
                         <goals>
                             <goal>shade</goal>
                         </goals>
-                        <!--<configuration>-->
-                            <!--<transformers>-->
-                                <!--<transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer" />-->
-                                <!--<transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">-->
-                                    <!--<mainClass>com.spaceape.wolf.TRexService</mainClass>-->
-                                <!--</transformer>-->
-                            <!--</transformers>-->
-                        <!--</configuration>-->
                     </execution>
                 </executions>
             </plugin>
         </plugins>
     </build>
+
+    <distributionManagement>
+        <repository>
+            <id>ossrh</id>
+            <url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
+        </repository>
+        <snapshotRepository>
+            <id>ossrh</id>
+            <url>https://oss.sonatype.org/content/repositories/snapshots</url>
+        </snapshotRepository>
+    </distributionManagement>
 
     <repositories>
         <repository>
