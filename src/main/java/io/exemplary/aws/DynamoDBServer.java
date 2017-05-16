@@ -16,42 +16,36 @@
 package io.exemplary.aws;
 
 import com.almworks.sqlite4java.SQLite;
-import com.amazonaws.services.dynamodbv2.dataMembers.ResponseData;
+import com.amazonaws.AmazonWebServiceRequest;
+import com.amazonaws.auth.BasicAWSCredentials;
+import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
 import com.amazonaws.services.dynamodbv2.exceptions.AmazonServiceExceptionType;
-import com.amazonaws.services.dynamodbv2.local.exceptions.ExceptionBean;
 import com.amazonaws.services.dynamodbv2.local.server.DynamoDBProxyServer;
-import com.amazonaws.services.dynamodbv2.local.server.DynamoDBRequestHandler;
-import com.amazonaws.services.dynamodbv2.local.server.LocalDynamoDBRequestHandler;
 import com.amazonaws.services.dynamodbv2.local.server.LocalDynamoDBServerHandler;
-import org.eclipse.jetty.server.Request;
+import com.amazonaws.services.dynamodbv2.model.*;
 
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import java.io.File;
-import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.URISyntaxException;
-import java.util.UUID;
 import java.util.logging.Logger;
 
+/**
+ * Local server that implements Aws DynamoDB API.
+ */
 public class DynamoDBServer {
 
     private static final Logger logger = Logger.getLogger(DynamoDBServer.class.getName());
 
-    private final static Boolean RUN_IN_MEMORY = true;
-    private final static String EMPTY_DB_PATH = null;
-    private final static Boolean NonSharedDb = false;
-    private final static Boolean NonDelayedTransientStatuses = false;
-    private final static String EmptyCorsParams = null;
+    private final static String EMPTY_CORS_PARAMS = null;
 
     private final int port;
+    private final RequestHandler requestHandler;
     private final DynamoDBProxyServer server;
 
     public DynamoDBServer(int port) {
         this.port = port;
-        LocalDynamoDBRequestHandler requestHandler = new LocalDynamoDBRequestHandler(0, RUN_IN_MEMORY, EMPTY_DB_PATH, NonSharedDb, NonDelayedTransientStatuses);
-        LocalDynamoDBServerHandlerWithException serverHandler = new LocalDynamoDBServerHandlerWithException(requestHandler);
+        requestHandler = new RequestHandler();
+        LocalDynamoDBServerHandler serverHandler = new LocalDynamoDBServerHandler(requestHandler, EMPTY_CORS_PARAMS);
         server = new DynamoDBProxyServer(port, serverHandler);
         Runtime.getRuntime().addShutdownHook(new Thread() {
             public void run() {
@@ -79,6 +73,9 @@ public class DynamoDBServer {
         }
     }
 
+    /**
+     * Start the server.
+     */
     public void start() {
         loadSqlLiteLibraries();
         try {
@@ -90,104 +87,162 @@ public class DynamoDBServer {
     }
 
     private void loadSqlLiteLibraries() {
+        File sqLiteJar = getSqLiteJar();
+        File sqLiteRoot = getSqLiteParent(sqLiteJar);
+        boolean loadedLibraries = loadLibrariesFromSubDirectories(sqLiteRoot);
+        if (!loadedLibraries) throw new IllegalStateException("Impossible to load sql lite libraries");
+    }
+
+    private File getSqLiteJar() {
         try {
-            File sqlLiteJar = new File(SQLite.class.getProtectionDomain().getCodeSource().getLocation().toURI());
-            File version = sqlLiteJar.getParentFile();
-            File artifact = version.getParentFile();
-            File group = artifact.getParentFile();
-            for (File file : group.listFiles()) if (!file.getName().equals(artifact.getName())) {
-                for (File ver : file.listFiles()) if (ver.getName().equals(version.getName())) {
-                    try {
-                        String path = ver.getPath();
-                        SQLite.setLibraryPath(path);
-                        SQLite.loadLibrary();
-                    } catch (Exception e) {}
-                }
-            }
+            return new File(SQLite.class.getProtectionDomain().getCodeSource().getLocation().toURI());
         } catch (URISyntaxException e) {
-            throw new IllegalStateException("Impossible to load sql lite libraries", e);
+            throw new IllegalStateException("Impossible to load sql lite jar", e);
         }
     }
 
+    private final static String SQLITE = "sqlite4java";
+
+    private File getSqLiteParent(File jar) {
+        File parent = jar.getParentFile();
+        while (parent.getPath().contains(SQLITE)) {
+            parent = parent.getParentFile();
+        }
+        return parent;
+    }
+
+    private boolean loadLibrariesFromSubDirectories(File directory) {
+        boolean result = loadLibrariesFromDirectory(directory);
+        if (result) return true;
+        else for(File file : directory.listFiles()) if (file.isDirectory()) {
+            if (loadLibrariesFromSubDirectories(file)) return true;
+        }
+        return false;
+    }
+
+    private boolean loadLibrariesFromDirectory(File directory) {
+        try {
+            String path = directory.getPath();
+            SQLite.setLibraryPath(path);
+            SQLite.loadLibrary();
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * Stop the server.
+     */
     public void stop() {
         try {
             logger.info("Stop dynamo db server");
             server.stop();
         } catch (Exception e) {
             throw new IllegalStateException("Impossible to stop Dynamo DB Server", e);
-
         }
     }
 
-
+    /**
+     * @return the server endpoint. The URI always point to localhost while
+     * the port depends how the server has been created.
+     */
     public String getEndpoint() {
         return "http://localhost:" + port;
     }
 
-    private interface HandlerBehaviour {}
-    private class NormalBehaviour implements HandlerBehaviour {}
-    private final NormalBehaviour NORMAL = new NormalBehaviour();
-    private class InjectedFailure implements HandlerBehaviour {
-        final int responseCode;
-        final String errorCode;
-        final String errorMessage;
-
-        private InjectedFailure(int responseCode, String errorCode, String errorMessage) {
-            this.responseCode = responseCode;
-            this.errorCode = errorCode;
-            this.errorMessage = errorMessage;
-        }
+    /**
+     * Reset the server status, bringing it back to the same position
+     * after the creation. All the tables will be deleted, forced
+     * errors cleaned and provisioned throughput reset.
+     */
+    public void reset() {
+        doesNotFail();
+        deleteAllTables();
     }
 
-    private HandlerBehaviour handlerBehaviour = NORMAL;
-
-    private class LocalDynamoDBServerHandlerWithException extends LocalDynamoDBServerHandler {
-
-        private LocalDynamoDBServerHandlerWithException(DynamoDBRequestHandler handler) {
-            super(handler, EmptyCorsParams);
+    private void deleteAllTables() {
+        AmazonDynamoDBClient client = new AmazonDynamoDBClient(new BasicAWSCredentials("accessKey", "secretKey"));
+        client.setEndpoint(getEndpoint());
+        ListTablesResult result = client.listTables(new ListTablesRequest());
+        for (String tableName : result.getTableNames()) {
+            client.deleteTable(new DeleteTableRequest(tableName));
         }
-
-        @Override
-        public void handle(String target,
-                           Request baseRequest,
-                           HttpServletRequest request,
-                           HttpServletResponse response) throws ServletException, IOException {
-            if (handlerBehaviour instanceof NormalBehaviour) {
-                super.handle(target, baseRequest, request, response);
-            } else if (handlerBehaviour instanceof InjectedFailure) {
-                InjectedFailure failure = (InjectedFailure) handlerBehaviour;
-                baseRequest.setHandled(true);
-                ResponseData res = new ResponseData(response);
-                res.getHttpServletResponse().setStatus(failure.responseCode);
-                res.setResponseBody(this.jsonMapper.writeValueAsBytes(new ExceptionBean(failure.errorCode, failure.errorMessage)));
-                response.setHeader("x-amzn-RequestId", UUID.randomUUID().toString());
-                response.getOutputStream().write(res.getResponseBody());
-            }
-        }
+        client.shutdown();
     }
 
-    public void forceFailureWith(AmazonServiceExceptionType exception) {
-        handlerBehaviour = new InjectedFailure(
+    /**
+     * The server behaves normally without any forces failures.
+     */
+    public void doesNotFail() {
+        requestHandler.doesNotFail();
+    }
+
+    /**
+     * The server is forced to fail with a predefined exception.
+     * @param exception of type {@link AmazonServiceExceptionType}.
+     * @return the server injected failure.
+     */
+    public InjectedFailure failsWith(AmazonServiceExceptionType exception) {
+        return new InjectedFailure(
             exception.getResponseStatus(),
             exception.getErrorCode(),
-            exception.getMessage()
+            exception.getMessage(),
+            null
         );
     }
 
-    public void forceFailureWith(int responseCode) {
-        forceFailureWith(responseCode, "");
+    /**
+     * The server is forced to fail with a an response code.
+     * @param responseCode the error response code.
+     * @return the server injected failure.
+     */
+    public InjectedFailure failsWithResponseCode(int responseCode) {
+        return new InjectedFailure(responseCode, "", "", null);
     }
 
-    public void forceFailureWith(int responseCode, String errorCode) {
-        forceFailureWith(responseCode, errorCode, "");
-    }
+    public class InjectedFailure {
 
-    public void forceFailureWith(int responseCode, String errorCode, String errorMessage) {
-        handlerBehaviour = new InjectedFailure(responseCode, errorCode, errorMessage);
-    }
+        final int responseCode;
+        final String errorCode;
+        final String errorMessage;
+        final ErrorCondition<? extends AmazonWebServiceRequest> errorCondition;
 
-    public void clearForcedFailure() {
-        handlerBehaviour = NORMAL;
+        private InjectedFailure(int responseCode, String errorCode, String errorMessage, ErrorCondition<? extends AmazonWebServiceRequest> errorCondition) {
+            this.responseCode = responseCode;
+            this.errorCode = errorCode;
+            this.errorMessage = errorMessage;
+            this.errorCondition = errorCondition;
+            requestHandler.setInjectedFailure(this);
+        }
+
+        /**
+         * The server is forced to fail with a an error code.
+         * @param errorCode the string summary of the error code.
+         * @return the server injected failure.
+         */
+        public InjectedFailure withAwsErrorCode(String errorCode) {
+            return new InjectedFailure(responseCode, errorCode, errorMessage, errorCondition);
+        }
+
+        /**
+         * The server is forced to fail with a an error message.
+         * @param errorMessage the string summary of the error message.
+         * @return the server injected failure.
+         */
+        public InjectedFailure withAwsErrorMessage(String errorMessage) {
+            return new InjectedFailure(responseCode, errorCode, errorMessage, errorCondition);
+        }
+
+        /**
+         * The server is forced to fail for a specific request depending on the condition.
+         * @param errorCondition the failing condition.
+         * @return the server injected failure.
+         */
+        public InjectedFailure withErrorCondition(ErrorCondition<? extends AmazonWebServiceRequest> errorCondition) {
+            return new InjectedFailure(responseCode, errorCode, errorMessage, errorCondition);
+        }
+
     }
 
 }

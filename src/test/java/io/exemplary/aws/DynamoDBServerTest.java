@@ -15,29 +15,19 @@
  */
 package io.exemplary.aws;
 
-import com.amazonaws.AmazonServiceException;
-import com.amazonaws.auth.BasicAWSCredentials;
-import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
-import com.amazonaws.services.dynamodbv2.exceptions.AmazonServiceExceptionType;
-import com.amazonaws.services.dynamodbv2.model.*;
+import com.amazonaws.services.dynamodbv2.model.AttributeValue;
+import com.amazonaws.services.dynamodbv2.model.ListTablesResult;
 import org.junit.Test;
 
 import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
 
-public class DynamoDBServerTest {
+public class DynamoDBServerTest extends AbstractTest {
 
     @Test
     public void theServerShouldRespondToASimpleRequestsFlow() {
-        // Create and start the server
-        DynamoDBServer server = new DynamoDBServer(8989);
-        server.start();
-        // Create the client
-        AmazonDynamoDBClient client = new AmazonDynamoDBClient(new BasicAWSCredentials("accessKey", "secretKey"));
-        client.setEndpoint(server.getEndpoint());
         // Create a table
         client.createTable(createTableRequest("tableName", "key"));
         // Get the tables name
@@ -54,114 +44,6 @@ public class DynamoDBServerTest {
         key.put("key", new AttributeValue("key1"));
         items = client.getItem("tableName", key).getItem();
         assertEquals("field1", items.get("field").getS());
-        // Stop the server
-        server.stop();
-    }
-
-    private CreateTableRequest createTableRequest(String tableName, String hashKeyName) {
-        AttributeDefinition attribute = new AttributeDefinition(hashKeyName, ScalarAttributeType.S);
-        KeySchemaElement keySchema = new KeySchemaElement(hashKeyName, KeyType.HASH);
-        ProvisionedThroughput throughput = new ProvisionedThroughput(10L, 10L);
-        return new CreateTableRequest()
-                .withTableName(tableName)
-                .withAttributeDefinitions(attribute)
-                .withKeySchema(keySchema)
-                .withProvisionedThroughput(throughput);
-    }
-
-    @Test
-    public void theServerShouldRespondToARandomPort() {
-        // Create and start the server
-        DynamoDBServer server = new DynamoDBServer();
-        server.start();
-        // Create the client
-        AmazonDynamoDBClient client = new AmazonDynamoDBClient(new BasicAWSCredentials("accessKey", "secretKey"));
-        client.setEndpoint(server.getEndpoint());
-        // Create a table
-        client.createTable(createTableRequest("tableName", "key"));
-        // Get the tables name
-        ListTablesResult result = client.listTables();
-        assertEquals(1, result.getTableNames().size());
-        assertEquals("tableName", result.getTableNames().get(0));
-        // Stop the server
-        server.stop();
-    }
-
-    @Test
-    public void theServerShouldBeForcedToFailWithACustomError() {
-        // Create and start the server
-        DynamoDBServer server = new DynamoDBServer(8989);
-        server.start();
-        // Create the client
-        AmazonDynamoDBClient client = new AmazonDynamoDBClient(new BasicAWSCredentials("accessKey", "secretKey"));
-        client.setEndpoint(server.getEndpoint());
-        // Failing server
-        server.forceFailureWith(501);
-        // Fail to create a table
-        AmazonServiceException error = null;
-        try {
-            client.createTable(createTableRequest("tableName", "key"));
-        } catch (AmazonServiceException e) {
-            error = e;
-        }
-        assertNotNull("The exception should have been thrown", error);
-        assertEquals(501, error.getStatusCode());
-        // Stop the server
-        server.stop();
-    }
-
-    @Test
-    public void theServerShouldBeForcedToFailWithAPreDefinedError() {
-        // Create and start the server
-        DynamoDBServer server = new DynamoDBServer(8989);
-        server.start();
-        // Create the client
-        AmazonDynamoDBClient client = new AmazonDynamoDBClient(new BasicAWSCredentials("accessKey", "secretKey"));
-        client.setEndpoint(server.getEndpoint());
-        // Failing server
-        server.forceFailureWith(AmazonServiceExceptionType.THROTTLING_EXCEPTION);
-        // Fail to create a table
-        AmazonServiceException error = null;
-        try {
-            client.createTable(createTableRequest("tableName", "key"));
-        } catch (AmazonServiceException e) {
-            error = e;
-        }
-        assertNotNull("The exception should have been thrown", error);
-        assertEquals(AmazonServiceExceptionType.THROTTLING_EXCEPTION.getResponseStatus(), error.getStatusCode());
-        assertEquals(AmazonServiceExceptionType.THROTTLING_EXCEPTION.getErrorCode(), error.getErrorCode());
-        assertEquals(AmazonServiceExceptionType.THROTTLING_EXCEPTION.getMessage(), error.getErrorMessage());
-        // Stop the server
-        server.stop();
-    }
-
-    @Test
-    public void theServerShouldBeForcedToFailAndShouldSucceed() {
-        // Create and start the server
-        DynamoDBServer server = new DynamoDBServer(8989);
-        server.start();
-        // Create the client
-        AmazonDynamoDBClient client = new AmazonDynamoDBClient(new BasicAWSCredentials("accessKey", "secretKey"));
-        client.setEndpoint(server.getEndpoint());
-        // Failing server
-        server.forceFailureWith(501);
-        // Fail to create a table
-        AmazonServiceException error = null;
-        try {
-            client.createTable(createTableRequest("tableName", "key"));
-        } catch (AmazonServiceException e) {
-            error = e;
-        }
-        assertNotNull("The exception should have been thrown", error);
-        // Server should not fail
-        server.clearForcedFailure();
-        // Succeed
-        client.createTable(createTableRequest("tableName", "key"));
-        ListTablesResult result = client.listTables();
-        assertEquals(1, result.getTableNames().size());
-        assertEquals("tableName", result.getTableNames().get(0));
-        // Stop the server
-        server.stop();
     }
 
 }
