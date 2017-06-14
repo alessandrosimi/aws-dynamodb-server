@@ -132,4 +132,17 @@ public class DynamoDBServerFailureTest extends AbstractTest {
         assertEquals(501, error.getStatusCode());
     }
 
+    @Test
+    public void shouldBePossibleTosStartTwoServers() {
+        DynamoDBServer server1 = new DynamoDBServer();
+        DynamoDBServer server2 = new DynamoDBServer();
+        try {
+            server1.start();
+            server2.start();
+        } finally {
+            server1.stop();
+            server2.stop();
+        }
+    }
+
 }

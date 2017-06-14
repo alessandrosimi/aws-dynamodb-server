@@ -22,7 +22,9 @@ import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
 import com.amazonaws.services.dynamodbv2.exceptions.AmazonServiceExceptionType;
 import com.amazonaws.services.dynamodbv2.local.server.DynamoDBProxyServer;
 import com.amazonaws.services.dynamodbv2.local.server.LocalDynamoDBServerHandler;
-import com.amazonaws.services.dynamodbv2.model.*;
+import com.amazonaws.services.dynamodbv2.model.DeleteTableRequest;
+import com.amazonaws.services.dynamodbv2.model.ListTablesRequest;
+import com.amazonaws.services.dynamodbv2.model.ListTablesResult;
 
 import java.io.File;
 import java.net.ServerSocket;
@@ -87,8 +89,9 @@ public class DynamoDBServer {
     }
 
     private void loadSqlLiteLibraries() {
+        SqliteLibrary.unload();
         File sqLiteJar = getSqLiteJar();
-        File sqLiteRoot = getSqLiteParent(sqLiteJar);
+        File sqLiteRoot = getSqLiteRoot(sqLiteJar);
         boolean loadedLibraries = loadLibrariesFromSubDirectories(sqLiteRoot);
         if (!loadedLibraries) throw new IllegalStateException("Impossible to load sql lite libraries");
     }
@@ -103,9 +106,9 @@ public class DynamoDBServer {
 
     private final static String SQLITE = "sqlite4java";
 
-    private File getSqLiteParent(File jar) {
-        File parent = jar.getParentFile();
-        while (parent.getPath().contains(SQLITE)) {
+    private File getSqLiteRoot(File jar) {
+        File parent = jar;
+        while (parent.getParentFile().getPath().contains(SQLITE)) {
             parent = parent.getParentFile();
         }
         return parent;

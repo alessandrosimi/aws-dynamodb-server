@@ -56,3 +56,36 @@ public class DynamoDBTest {
 
 }
 ```
+
+## Inject errors
+
+The server behaviour can be controlled specifying the error.
+The error can be one of the Amazon service exceptions or an http error code.
+
+```java
+DynamoDBServer server = new DynamoDBServer();
+// Amazon exception
+server.failsWith(AmazonServiceExceptionType.THROTTLING_EXCEPTION);
+// Error code
+server.failsWithResponseCode(501);
+```
+
+The error would apply to all the server request until the normal behaviour is restored.
+
+```java
+server.doesNotFail();
+```
+
+Also is possible to specify the request that triggers the error with a condition.
+
+```java
+server.failsWith(AmazonServiceExceptionType.THROTTLING_EXCEPTION)
+      .withErrorCondition(new ErrorCondition<CreateTableRequest>() {
+    @Override
+    public boolean shouldFail(CreateTableRequest request) {
+        return request.getTableName().equals("myTable");
+    }
+});
+```
+
+In this example the request fails with a throttling exception only for the table "myTable" creation.
